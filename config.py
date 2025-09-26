@@ -29,7 +29,7 @@ class Config:
     LOCAL_REPO_PATH: Path = field(
         default_factory=lambda: Path(__file__).parent / "synapse_state_repo"
     )
-    SYNC_INTERVAL_SECONDS: int = 30
+    TICK_INTERVAL_SECONDS: int = 5
 
     # --- Configurazione dello Streaming ---
     STREAM_WIDTH: int = 1280

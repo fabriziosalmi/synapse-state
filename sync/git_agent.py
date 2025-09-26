@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import sys
 import time
@@ -18,20 +19,16 @@ def retry_on_git_error(max_retries=3, delay=5):
                 try:
                     return func(*args, **kwargs)
                 except GitCommandError as e:
-                    print(
+                    logging.warning(
                         f"Tentativo {attempt + 1}/{max_retries} fallito per "
-                        f"{func.__name__}: {e}",
-                        file=sys.stderr,
+                        f"{func.__name__}: {e}"
                     )
                     if attempt < max_retries - 1:
-                        print(
-                            f"Nuovo tentativo in {delay} secondi...", file=sys.stderr
-                        )
+                        logging.info(f"Nuovo tentativo in {delay} secondi...")
                         time.sleep(delay)
                     else:
-                        print(
-                            f"Tutti i tentativi per {func.__name__} sono falliti.",
-                            file=sys.stderr,
+                        logging.error(
+                            f"Tutti i tentativi per {func.__name__} sono falliti."
                         )
             return None
 
@@ -56,19 +53,19 @@ class GitAgent:
     def _init_repo(self) -> Repo:
         """Clona il repo se non esiste, altrimenti lo carica."""
         if not self.local_path.exists():
-            print(f"Clonazione del repository da {self.repo_url}...")
+            logging.info(f"Clonazione del repository da {self.repo_url}...")
             return Repo.clone_from(self.repo_url, self.local_path)
         else:
-            print("Caricamento del repository locale esistente.")
+            logging.info("Caricamento del repository locale esistente.")
             return Repo(self.local_path)
 
     @retry_on_git_error()
     def pull_changes(self):
         """Scarica le ultime modifiche dal repository remoto."""
-        print("Esecuzione di 'git pull'...")
+        logging.info("Esecuzione di 'git pull'...")
         origin = self.repo.remotes.origin
         origin.pull()
-        print("Pull completato.")
+        logging.info("Pull completato.")
 
     @retry_on_git_error()
     def push_heartbeat(self, stream_id: str):
@@ -83,16 +80,13 @@ class GitAgent:
             try:
                 with open(self.node_file, "r") as f:
                     existing_data = json.load(f)
-                    # Usa il valore esistente se presente, altrimenti
-                    # mantieni quello attuale
                     creation_timestamp = existing_data.get(
                         "creation_timestamp", current_time
                     )
             except (json.JSONDecodeError, OSError):
-                print(
-                    f"Attenzione: impossibile leggere il file del nodo esistente "
-                    f"{self.node_file}. Ne verrà creato uno nuovo.",
-                    file=sys.stderr,
+                logging.warning(
+                    f"Impossibile leggere il file del nodo esistente "
+                    f"{self.node_file}. Ne verrà creato uno nuovo."
                 )
 
         node_data = {
@@ -105,11 +99,11 @@ class GitAgent:
             json.dump(node_data, f, indent=2)
 
         if self.repo.is_dirty(untracked_files=True):
-            print("Rilevate modifiche, invio dell'heartbeat...")
+            logging.info("Rilevate modifiche, invio dell'heartbeat...")
             self.repo.index.add([str(self.node_file)])
             self.repo.index.commit(f"Heartbeat from node {self.node_id}")
             self.repo.remotes.origin.push()
-            print("Heartbeat inviato con successo.")
+            logging.info("Heartbeat inviato con successo.")
 
     def get_world_state(self) -> dict:
         """Legge nodi ed eventi per costruire lo stato del mondo."""
@@ -129,12 +123,9 @@ class GitAgent:
                             }
                         )
                     except json.JSONDecodeError:
-                        print(
-                            f"Attenzione: file JSON del nodo non valido: {file_path}",
-                            file=sys.stderr,
+                        logging.warning(
+                            f"File JSON del nodo non valido: {file_path}"
                         )
-
-        # La logica di posizionamento verrà gestita dal frontend
 
         events_path = self.local_path / "events"
         events = []
@@ -145,10 +136,8 @@ class GitAgent:
                         data = json.load(f)
                         events.append(data)
                     except json.JSONDecodeError:
-                        print(
-                            f"Attenzione: file JSON dell'evento non valido: "
-                            f"{file_path}",
-                            file=sys.stderr,
+                        logging.warning(
+                            f"File JSON dell'evento non valido: {file_path}"
                         )
 
         connections = []
@@ -175,15 +164,14 @@ class GitAgent:
         with open(event_file_path, "w") as f:
             json.dump(event_data, f, indent=2)
 
-        print(f"Invio dell'evento '{event_type}'...")
+        logging.info(f"Invio dell'evento '{event_type}'...")
         self.repo.index.add([str(event_file_path)])
         self.repo.index.commit(f"event: {event_type} from {self.node_id}")
         self.repo.remotes.origin.push()
-        print("Evento inviato con successo.")
+        logging.info("Evento inviato con successo.")
 
     def cleanup_local_events(self):
         """Rimuove gli eventi locali che sono scaduti (TTL)."""
-        # ... (il resto del metodo rimane invariato)
         events_path = self.local_path / "events"
         if not events_path.exists():
             return
@@ -201,13 +189,12 @@ class GitAgent:
                     files_to_remove.append(str(file_path))
 
         if files_to_remove:
-            print(f"Pulizia di {len(files_to_remove)} eventi scaduti...")
+            logging.info(f"Pulizia di {len(files_to_remove)} eventi scaduti...")
             self.repo.index.remove(files_to_remove, working_tree=False)
             for f in files_to_remove:
                 try:
                     os.remove(f)
                 except OSError as e:
-                    print(
-                        f"Errore nella rimozione del file evento locale {f}: {e}",
-                        file=sys.stderr,
+                    logging.warning(
+                        f"Errore nella rimozione del file evento locale {f}: {e}"
                     )

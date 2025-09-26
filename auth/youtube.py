@@ -1,4 +1,4 @@
-
+import logging
 import pickle
 import sys
 from pathlib import Path
@@ -11,6 +11,7 @@ from googleapiclient.discovery import build
 SCOPES = ["https://www.googleapis.com/auth/youtube"]
 API_SERVICE_NAME = "youtube"
 API_VERSION = "v3"
+
 
 def get_authenticated_service(client_secrets_file: Path, token_pickle_file: Path):
     """
@@ -26,10 +27,8 @@ def get_authenticated_service(client_secrets_file: Path, token_pickle_file: Path
             creds.refresh(Request())
         else:
             if not client_secrets_file.exists():
-                print(
-                    "ERRORE: Il file delle credenziali "
-                    f"'{client_secrets_file}' non è stato trovato.",
-                    file=sys.stderr,
+                logging.error(
+                    f"ERRORE: Il file delle credenziali '{client_secrets_file}' non è stato trovato."
                 )
                 sys.exit(1)
             flow = InstalledAppFlow.from_client_secrets_file(
@@ -41,23 +40,24 @@ def get_authenticated_service(client_secrets_file: Path, token_pickle_file: Path
 
     return build(API_SERVICE_NAME, API_VERSION, credentials=creds)
 
+
 def get_or_create_stream(youtube):
     """
     Recupera un live stream esistente o ne crea uno nuovo se non esiste.
     Restituisce l'URL di ingestione (RTMP).
     """
-    print("Recupero/Creazione dello stream di YouTube...")
+    logging.info("Recupero/Creazione dello stream di YouTube...")
     list_streams_request = youtube.liveStreams().list(
         part="id,snippet,cdn", mine=True
     )
     streams = list_streams_request.execute().get("items", [])
 
     if streams:
-        print(f"Trovato stream esistente: '{streams[0]['snippet']['title']}'")
+        logging.info(f"Trovato stream esistente: '{streams[0]['snippet']['title']}'")
         stream_id = streams[0]["id"]
         ingestion_info = streams[0]["cdn"]["ingestionInfo"]
     else:
-        print("Nessuno stream esistente trovato. Creazione di un nuovo stream...")
+        logging.info("Nessuno stream esistente trovato. Creazione di un nuovo stream...")
         create_stream_request = youtube.liveStreams().insert(
             part="snippet,cdn",
             body={
@@ -77,17 +77,18 @@ def get_or_create_stream(youtube):
         new_stream = create_stream_request.execute()
         stream_id = new_stream["id"]
         ingestion_info = new_stream["cdn"]["ingestionInfo"]
-        print(f"Nuovo stream creato con ID: {stream_id}")
+        logging.info(f"Nuovo stream creato con ID: {stream_id}")
 
     ingestion_address = ingestion_info["ingestionAddress"]
     stream_name = ingestion_info["streamName"]
     return f"{ingestion_address}/{stream_name}", stream_id
 
+
 def create_broadcast(youtube, stream_id):
     """
     Crea un nuovo Live Broadcast e lo associa allo stream esistente.
     """
-    print("Creazione di un nuovo Live Broadcast...")
+    logging.info("Creazione di un nuovo Live Broadcast...")
     broadcast_request = youtube.liveBroadcasts().insert(
         part="snippet,status",
         body={
@@ -102,14 +103,12 @@ def create_broadcast(youtube, stream_id):
     )
     broadcast = broadcast_request.execute()
     broadcast_id = broadcast["id"]
-    print(f"Nuovo broadcast creato con ID: {broadcast_id}")
+    logging.info(f"Nuovo broadcast creato con ID: {broadcast_id}")
 
     # Associa il broadcast allo stream
     bind_request = youtube.liveBroadcasts().bind(
-        part="id,snippet,contentDetails,status",
-        id=broadcast_id,
-        streamId=stream_id
+        part="id,snippet,contentDetails,status", id=broadcast_id, streamId=stream_id
     )
     bind_response = bind_request.execute()
-    print(f"Broadcast associato allo stream. ID video: {bind_response['id']}")
+    logging.info(f"Broadcast associato allo stream. ID video: {bind_response['id']}")
     return bind_response

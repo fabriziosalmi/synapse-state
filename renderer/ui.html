@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synapse Node Control Panel</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            font-family: monospace;
+            padding: 1em;
+        }
+        h1 {
+            color: #FF0000;
+        }
+        #log-container {
+            width: 100%;
+            height: 80vh;
+            overflow-y: scroll;
+            border: 1px solid #444;
+            padding: 1em;
+            background-color: #000;
+            box-sizing: border-box;
+        }
+        .log-entry {
+            white-space: pre-wrap;
+            padding-bottom: 5px;
+        }
+        .log-entry.info { color: #e0e0e0; }
+        .log-entry.warning { color: #ffcc00; }
+        .log-entry.error { color: #ff4d4d; }
+    </style>
+</head>
+<body>
+    <h1>Synapse Node - Control Panel</h1>
+    <div id="log-container"></div>
+
+    <script src="/js/ui.js"></script>
+</body>
+</html>
