@@ -47,6 +47,13 @@ class GitAgent:
         self.local_path = Path(local_path)
         self.node_id = node_id
         self.repo = self._init_repo()
+
+        if self.repo is None:
+            raise RuntimeError(
+                "Impossibile inizializzare il repository Git. "
+                "Controlla l'URL e le credenziali di accesso."
+            )
+
         self.node_file = self.local_path / "nodes" / f"{self.node_id}.json"
 
     @retry_on_git_error()
