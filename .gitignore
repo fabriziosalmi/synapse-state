@@ -19,3 +19,4 @@ token.json
 
 # File di sistema
 .DS_Store
+config.env

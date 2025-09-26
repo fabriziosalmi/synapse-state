@@ -7,32 +7,32 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
+from pathlib import Path
+
 # --- CONFIGURAZIONE E COSTANTI ---
-CLIENT_SECRETS_FILE = "client_secrets.json"
-TOKEN_PICKLE_FILE = "token.pickle"
 SCOPES = ["https://www.googleapis.com/auth/youtube"]
 API_SERVICE_NAME = "youtube"
 API_VERSION = "v3"
 
-def get_authenticated_service():
+def get_authenticated_service(client_secrets_file: Path, token_pickle_file: Path):
     """
     Ottiene un'istanza del servizio API di YouTube autenticata.
     """
     creds = None
-    if os.path.exists(TOKEN_PICKLE_FILE):
-        with open(TOKEN_PICKLE_FILE, "rb") as token:
+    if token_pickle_file.exists():
+        with open(token_pickle_file, "rb") as token:
             creds = pickle.load(token)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            if not os.path.exists(CLIENT_SECRETS_FILE):
-                print(f"ERRORE: Il file delle credenziali '{CLIENT_SECRETS_FILE}' non è stato trovato.", file=sys.stderr)
+            if not client_secrets_file.exists():
+                print(f"ERRORE: Il file delle credenziali '{client_secrets_file}' non è stato trovato.", file=sys.stderr)
                 sys.exit(1)
-            flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRETS_FILE, SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(client_secrets_file, SCOPES)
             creds = flow.run_local_server(port=0)
-        with open(TOKEN_PICKLE_FILE, "wb") as token:
+        with open(token_pickle_file, "wb") as token:
             pickle.dump(creds, token)
             
     return build(API_SERVICE_NAME, API_VERSION, credentials=creds)

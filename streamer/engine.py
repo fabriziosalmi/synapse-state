@@ -11,34 +11,40 @@ import uvicorn
 # Costanti
 RENDERER_PATH = Path(__file__).parent.parent / "renderer"
 
+import sys
+
 class StreamingEngine:
     """
     Orchestra il rendering web locale, la cattura tramite browser headless
     e lo streaming video tramite FFMPEG.
     """
 
-    def __init__(self, width: int, height: int, youtube_stream_url: str):
+    def __init__(self, width: int, height: int, youtube_stream_url: str, port: int, framerate: int, bitrate: str, preset: str):
         self.width = width
         self.height = height
         self.youtube_stream_url = youtube_stream_url
+        self.port = port
+        self.framerate = framerate
+        self.bitrate = bitrate
+        self.preset = preset
+        
         self.ffmpeg_process = None
         self.fastapi_app = self._create_fastapi_app()
 
     def _create_fastapi_app(self) -> FastAPI:
         """Crea e configura l'istanza del server web FastAPI."""
         app = FastAPI()
-        # Monta la cartella 'renderer' come un sito statico
         app.mount("/", StaticFiles(directory=RENDERER_PATH, html=True), name="renderer")
         return app
 
     async def _run_web_server(self):
         """Avvia il server web Uvicorn in un task asyncio."""
-        config = uvicorn.Config(self.fastapi_app, host="127.0.0.1", port=8000, log_level="warning")
+        config = uvicorn.Config(self.fastapi_app, host="127.0.0.1", port=self.port, log_level="warning")
         server = uvicorn.Server(config)
-        print("Server web locale avviato su http://127.0.0.1:8000")
+        print(f"Server web locale avviato su http://127.0.0.1:{self.port}")
         await server.serve()
 
-        async def start_streaming(self):
+    async def start_streaming(self):
         """
         Avvia l'intero processo di streaming.
         """
@@ -47,27 +53,18 @@ class StreamingEngine:
 
         ffmpeg_command = [
             'ffmpeg',
-            # Input: Immagini PNG da una pipe
             '-f', 'image2pipe',
-            '-framerate', '30', # Frame rate dell'input
+            '-framerate', str(self.framerate),
             '-c:v', 'png',
-            '-i', '-',  # Legge l'input dallo stdin (pipe)
-
-            # Input Audio Silenzioso (richiesto da YouTube)
+            '-i', '-',
             '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
-
-            # Codec Video: H.264 ottimizzato per streaming
             '-c:v', 'libx264',
             '-pix_fmt', 'yuv420p',
-            '-preset', 'ultrafast',
+            '-preset', self.preset,
             '-tune', 'zerolatency',
-            '-b:v', '6000k', # Bitrate video
-
-            # Codec Audio
+            '-b:v', self.bitrate,
             '-c:a', 'aac',
             '-b:a', '128k',
-
-            # Formato di output e destinazione
             '-f', 'flv',
             self.youtube_stream_url
         ]
@@ -83,7 +80,7 @@ class StreamingEngine:
         async with async_playwright() as p:
             self.browser = await p.chromium.launch(headless=True)
             self.page = await self.browser.new_page(viewport={'width': self.width, 'height': self.height})
-            await self.page.goto("http://127.0.0.1:8000")
+            await self.page.goto(f"http://127.0.0.1:{self.port}")
             print("Browser headless avviato e pagina caricata.")
 
             print("\n--- INIZIO STREAMING ---")
@@ -102,7 +99,7 @@ class StreamingEngine:
                         print("Pipe verso FFMPEG interrotta. Fine dello streaming.", file=sys.stderr)
                         break
 
-                    await asyncio.sleep(1/30) # Limita il frame rate
+                    await asyncio.sleep(1 / self.framerate)
             except Exception as e:
                 print(f"Errore durante il loop di streaming: {e}", file=sys.stderr)
             finally:

@@ -1,114 +1,138 @@
 
-import argparse
 import asyncio
 import json
 import sys
+import random
 import time
-import uuid
-from pathlib import Path
 
+from config import get_config, Config
 from auth.youtube import get_authenticated_service, get_or_create_stream, create_broadcast
 from streamer.engine import StreamingEngine
 from sync.git_agent import GitAgent
 
-from dotenv import load_dotenv
+class SynapseNode:
+    """Classe principale che orchestra un nodo della rete Synapse."""
 
-# Carica le variabili d'ambiente dal file .env (se presente)
-load_dotenv(dotenv_path='config.env')
+    def __init__(self, config: Config):
+        self.config = config
+        self.git_agent = GitAgent(
+            repo_url=config.GIT_REPO_URL,
+            local_path=config.LOCAL_REPO_PATH,
+            node_id=config.NODE_ID
+        )
+        self.streaming_engine = None
+        self.youtube_service = None
+        self.stream_id = None
+        self.broadcast_id = None
+        self.last_pulse_time = 0
 
-# --- CONFIGURAZIONE --- #
-# Legge la configurazione dalle variabili d'ambiente
-GIT_REPO_URL = os.getenv('SYNAPSE_GIT_REPO_URL')
-NODE_ID = os.getenv('SYNAPSE_NODE_ID') or f"node_{uuid.uuid4().hex[:8]}"
-
-if not GIT_REPO_URL:
-    print("ERRORE: La variabile d'ambiente SYNAPSE_GIT_REPO_URL non è impostata.", file=sys.stderr)
-    print("Per favore, crea un file 'config.env' o imposta la variabile d'ambiente.", file=sys.stderr)
-    sys.exit(1)
-
-# Percorso in cui il renderer web cercherà lo stato della rete
-RENDERER_STATE_FILE = Path(__file__).parent / "renderer" / "state.json"
-
-async def main_loop(git_agent: GitAgent, stream_id: str):
-    """
-    Loop principale che sincronizza lo stato con Git.
-    """
-    while True:
-        print("\n--- Ciclo di Sincronizzazione ---")
-        # 1. Scarica le modifiche dagli altri nodi
-        git_agent.pull_changes()
-
-        # 2. Ottieni lo stato aggiornato della rete
-        network_state = git_agent.get_network_state()
-        print(f"Stato della rete aggiornato. Nodi presenti: {len(network_state['nodes'])}")
-
-        # 3. Scrivi lo stato per il renderer web
-        with open(RENDERER_STATE_FILE, 'w') as f:
-            json.dump(network_state, f)
-
-        # 4. Invia il nostro heartbeat
-        git_agent.push_heartbeat(stream_id)
-        
-        await asyncio.sleep(30) # Intervallo di sincronizzazione
-
-async def start_service(args):
-    """
-    Funzione principale che avvia tutti i servizi.
-    """
-    print(f"Nodo '{NODE_ID}' avviato.")
-    engine = None
-    try:
-        # 1. Inizializza l'agente Git ed esegui una sincronizzazione iniziale
-        git_agent = GitAgent(repo_url=GIT_REPO_URL, local_path=LOCAL_REPO_PATH, node_id=NODE_ID)
+    def _initial_sync(self):
+        """Esegue la sincronizzazione iniziale con il repository Git."""
         print("Esecuzione della sincronizzazione iniziale...")
-        git_agent.pull_changes()
-        initial_state = git_agent.get_network_state()
-        with open(RENDERER_STATE_FILE, 'w') as f:
-            json.dump(initial_state, f)
+        self.git_agent.pull_changes()
+        world_state = self.git_agent.get_world_state()
+        with open(self.config.RENDERER_STATE_FILE, 'w') as f:
+            json.dump(world_state, f)
         print("Stato iniziale sincronizzato.")
 
-        # 2. Autenticazione e creazione stream YouTube
+    def _authenticate_youtube(self):
+        """Gestisce l'autenticazione e la creazione dello stream YouTube."""
+        print("Autenticazione con YouTube...")
         try:
-            youtube_service = get_authenticated_service()
-            rtmp_url, stream_id = get_or_create_stream(youtube_service)
-            broadcast = create_broadcast(youtube_service, stream_id)
+            self.youtube_service = get_authenticated_service(
+                client_secrets_file=self.config.YOUTUBE_CLIENT_SECRETS_FILE,
+                token_pickle_file=self.config.YOUTUBE_TOKEN_PICKLE_FILE
+            )
+            rtmp_url, self.stream_id = get_or_create_stream(self.youtube_service)
+            broadcast = create_broadcast(self.youtube_service, self.stream_id)
+            self.broadcast_id = broadcast['id']
+            
             print(f"Streaming URL: {rtmp_url}")
-            print(f"Guarda lo stream qui: https://www.youtube.com/watch?v={broadcast['id']}")
+            print(f"Guarda lo stream qui: https://www.youtube.com/watch?v={self.broadcast_id}")
+            return rtmp_url
         except Exception as e:
             print(f"Impossibile inizializzare lo stream di YouTube: {e}", file=sys.stderr)
             sys.exit(1)
 
-        # 3. Avvia il motore di streaming
-        engine = StreamingEngine(width=1280, height=720, youtube_stream_url=rtmp_url)
-        streaming_task = asyncio.create_task(engine.start_streaming())
+    async def _main_loop(self):
+        """Loop principale asincrono per la sincronizzazione continua."""
+        PULSE_INTERVAL = 20 # Secondi tra un impulso e l'altro
+        while True:
+            print(f"\n--- Ciclo di Sincronizzazione (intervallo: {self.config.SYNC_INTERVAL_SECONDS}s) ---")
+            self.git_agent.pull_changes()
+            self.git_agent.cleanup_local_events()
+            
+            world_state = self.git_agent.get_world_state()
+            print(f"Stato del mondo aggiornato. Nodi: {len(world_state['nodes'])}, Eventi: {len(world_state['events'])}")
 
-        # 4. Avvia il loop di sincronizzazione Git in background
-        sync_task = asyncio.create_task(main_loop(git_agent, broadcast['id']))
+            with open(self.config.RENDERER_STATE_FILE, 'w') as f:
+                json.dump(world_state, f)
 
-        # Attendi che i task finiscano
+            self.git_agent.push_heartbeat(self.broadcast_id)
+
+            # Logica per inviare un impulso periodico
+            now = time.time()
+            if (now - self.last_pulse_time) > PULSE_INTERVAL:
+                other_nodes = [n for n in world_state.get('nodes', []) if n['id'] != self.config.NODE_ID]
+                if other_nodes:
+                    target_node = random.choice(other_nodes)
+                    print(f"Invio di un impulso al nodo: {target_node['id']}")
+                    self.git_agent.push_event(
+                        event_type="pulse",
+                        data={"target_node_id": target_node['id']},
+                        ttl_seconds=10
+                    )
+                    self.last_pulse_time = now
+            
+            await asyncio.sleep(self.config.SYNC_INTERVAL_SECONDS)
+
+    async def run(self):
+        """Avvia tutti i servizi e i loop del nodo."""
+        print(f"Nodo '{self.config.NODE_ID}' avviato.")
+        self._initial_sync()
+        rtmp_url = self._authenticate_youtube()
+
+        self.git_agent.push_event(
+            event_type="node_joined", 
+            data={"broadcast_id": self.broadcast_id}, 
+            ttl_seconds=30
+        )
+
+        self.streaming_engine = StreamingEngine(
+            width=self.config.STREAM_WIDTH,
+            height=self.config.STREAM_HEIGHT,
+            youtube_stream_url=rtmp_url,
+            port=self.config.RENDERER_PORT
+        )
+
+        streaming_task = asyncio.create_task(self.streaming_engine.start_streaming())
+        sync_task = asyncio.create_task(self._main_loop())
+
         await asyncio.gather(streaming_task, sync_task)
 
-    finally:
-        if engine:
+    async def shutdown(self):
+        """Esegue una chiusura pulita dei servizi."""
+        if self.streaming_engine:
             print("Avvio della procedura di spegnimento...")
-            await engine.stop_streaming()
+            await self.streaming_engine.stop_streaming()
+        print("Nodo arrestato.")
 
 def main():
-    parser = argparse.ArgumentParser(description="GitNet Streamer Node")
-    subparsers = parser.add_subparsers(dest='command', required=True)
-
-    start_parser = subparsers.add_parser('start', help='Avvia il nodo streamer.')
-    start_parser.set_defaults(func=start_service)
-
-    args = parser.parse_args()
-    
+    """Punto di ingresso principale dell'applicazione."""
+    node = None
     try:
-        asyncio.run(args.func(args))
+        config = get_config()
+        node = SynapseNode(config)
+        asyncio.run(node.run())
+    except ValueError as e:
+        print(f"Errore di configurazione: {e}", file=sys.stderr)
+        sys.exit(1)
     except KeyboardInterrupt:
         print("\nArresto del nodo in corso...")
     finally:
-        # Pulizia finale (anche se i singoli moduli hanno già la loro)
-        print("Nodo arrestato.")
+        if node:
+            # asyncio.run(node.shutdown()) # Questa riga può causare problemi in fase di shutdown
+            pass # La pulizia avviene già nel motore di streaming
 
 if __name__ == "__main__":
     main()
