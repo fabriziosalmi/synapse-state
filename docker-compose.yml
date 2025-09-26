@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  synapse_node:
+    # Costruisce l'immagine Docker usando il Dockerfile nella directory corrente
+    build: .
+    # Nome del container
+    container_name: synapse-node
+    # Riavvia il container solo se viene fermato manualmente
+    restart: unless-stopped
+
+    # File da cui leggere le variabili d'ambiente
+    env_file:
+      - config.env
+
+    # Monta i volumi per rendere persistenti i dati e fornire le credenziali
+    volumes:
+      # Monta la directory locale 'gitnet_state' per conservare il repo clonato
+      - ./gitnet_state:/app/gitnet_state
+      # Monta il file delle credenziali di YouTube (sola lettura)
+      - ./client_secrets.json:/app/client_secrets.json:ro
+      # Monta il file del token di autenticazione per non dover ri-autorizzare ogni volta
+      - ./token.pickle:/app/token.pickle

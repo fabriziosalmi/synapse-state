@@ -1,0 +1,58 @@
+name: Cleanup Stale Nodes
+
+on:
+  # Esegue ogni ora
+  schedule:
+    - cron: '0 * * * *'
+  # Permette l'esecuzione manuale dalla tab Actions di GitHub
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Cleanup stale nodes
+        run: |
+          STALE_THRESHOLD_SECONDS=300 # 5 minuti
+          CURRENT_TIMESTAMP=$(date +%s)
+          NODES_DIR="nodes"
+
+          if [ ! -d "$NODES_DIR" ]; then
+            echo "La cartella '$NODES_DIR' non esiste. Nessuna pulizia necessaria."
+            exit 0
+          fi
+
+          find $NODES_DIR -name "*.json" | while read -r file; do
+            NODE_TIMESTAMP=$(jq '.timestamp' "$file")
+            
+            if [ -z "$NODE_TIMESTAMP" ] || ! [[ "$NODE_TIMESTAMP" =~ ^[0-9]+$ ]]; then
+              echo "Timestamp non valido o mancante nel file $file. Lo rimuovo."
+              git rm "$file"
+              continue
+            fi
+
+            ELAPSED_TIME=$((CURRENT_TIMESTAMP - NODE_TIMESTAMP))
+
+            if [ "$ELAPSED_TIME" -gt "$STALE_THRESHOLD_SECONDS" ]; then
+              echo "Nodo $file obsoleto (ultimo heartbeat: $ELAPSED_TIME secondi fa). Lo rimuovo..."
+              git rm "$file"
+            fi
+          done
+
+      - name: Commit and push changes
+        run: |
+          # Configura git
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          # Verifica se ci sono modifiche da committare
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: Cleanup stale nodes"
+            git push
+            echo "Modifiche committate e inviate."
+          else
+            echo "Nessun nodo obsoleto da pulire."
+          fi

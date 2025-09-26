@@ -1,0 +1,21 @@
+# Bytecode e cache di Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ambiente virtuale
+.venv/
+env/
+venv/
+
+# File di credenziali e token (MOLTO IMPORTANTE)
+client_secrets.json
+token.pickle
+token.json
+
+# File di configurazione specifici dell'IDE
+.idea/
+.vscode/
+
+# File di sistema
+.DS_Store

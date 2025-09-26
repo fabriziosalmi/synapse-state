@@ -1,0 +1,16 @@
+# Librerie per l'API di Google
+google-api-python-client
+google-auth-oauthlib
+
+# Libreria per il browser headless (cattura web)
+playwright
+
+# Librerie per il server web locale che servirà il renderer
+fastapi
+uvicorn
+
+# Libreria per interagire con i repository Git
+GitPython
+
+# Libreria per caricare variabili d'ambiente da file .env
+python-dotenv
