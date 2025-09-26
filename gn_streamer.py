@@ -1,14 +1,19 @@
 
 import asyncio
 import json
-import sys
 import random
+import sys
 import time
 
-from config import get_config, Config
-from auth.youtube import get_authenticated_service, get_or_create_stream, create_broadcast
+from auth.youtube import (
+    create_broadcast,
+    get_authenticated_service,
+    get_or_create_stream,
+)
+from config import Config, get_config
 from streamer.engine import StreamingEngine
 from sync.git_agent import GitAgent
+
 
 class SynapseNode:
     """Classe principale che orchestra un nodo della rete Synapse."""
@@ -46,24 +51,33 @@ class SynapseNode:
             rtmp_url, self.stream_id = get_or_create_stream(self.youtube_service)
             broadcast = create_broadcast(self.youtube_service, self.stream_id)
             self.broadcast_id = broadcast['id']
-            
+
             print(f"Streaming URL: {rtmp_url}")
-            print(f"Guarda lo stream qui: https://www.youtube.com/watch?v={self.broadcast_id}")
+            print(f"Guarda lo stream qui: "
+                  f"https://www.youtube.com/watch?v={self.broadcast_id}")
             return rtmp_url
         except Exception as e:
-            print(f"Impossibile inizializzare lo stream di YouTube: {e}", file=sys.stderr)
+            print(
+                f"Impossibile inizializzare lo stream di YouTube: {e}", file=sys.stderr
+            )
             sys.exit(1)
 
     async def _main_loop(self):
         """Loop principale asincrono per la sincronizzazione continua."""
         PULSE_INTERVAL = 20 # Secondi tra un impulso e l'altro
         while True:
-            print(f"\n--- Ciclo di Sincronizzazione (intervallo: {self.config.SYNC_INTERVAL_SECONDS}s) ---")
+            print(
+                f"\n--- Ciclo di Sincronizzazione (intervallo: "
+                f"{self.config.SYNC_INTERVAL_SECONDS}s) ---"
+            )
             self.git_agent.pull_changes()
             self.git_agent.cleanup_local_events()
-            
+
             world_state = self.git_agent.get_world_state()
-            print(f"Stato del mondo aggiornato. Nodi: {len(world_state['nodes'])}, Eventi: {len(world_state['events'])}")
+            print(
+                f"Stato del mondo aggiornato. Nodi: {len(world_state['nodes'])}, "
+                f"Eventi: {len(world_state['events'])}"
+            )
 
             with open(self.config.RENDERER_STATE_FILE, 'w') as f:
                 json.dump(world_state, f)
@@ -73,7 +87,10 @@ class SynapseNode:
             # Logica per inviare un impulso periodico
             now = time.time()
             if (now - self.last_pulse_time) > PULSE_INTERVAL:
-                other_nodes = [n for n in world_state.get('nodes', []) if n['id'] != self.config.NODE_ID]
+                other_nodes = [
+                    n for n in world_state.get('nodes', [])
+                    if n['id'] != self.config.NODE_ID
+                ]
                 if other_nodes:
                     target_node = random.choice(other_nodes)
                     print(f"Invio di un impulso al nodo: {target_node['id']}")
@@ -83,7 +100,7 @@ class SynapseNode:
                         ttl_seconds=10
                     )
                     self.last_pulse_time = now
-            
+
             await asyncio.sleep(self.config.SYNC_INTERVAL_SECONDS)
 
     async def run(self):
@@ -93,8 +110,8 @@ class SynapseNode:
         rtmp_url = self._authenticate_youtube()
 
         self.git_agent.push_event(
-            event_type="node_joined", 
-            data={"broadcast_id": self.broadcast_id}, 
+            event_type="node_joined",
+            data={"broadcast_id": self.broadcast_id},
             ttl_seconds=30
         )
 
@@ -102,7 +119,10 @@ class SynapseNode:
             width=self.config.STREAM_WIDTH,
             height=self.config.STREAM_HEIGHT,
             youtube_stream_url=rtmp_url,
-            port=self.config.RENDERER_PORT
+            port=self.config.RENDERER_PORT,
+            framerate=self.config.STREAM_FRAMERATE,
+            bitrate=self.config.STREAM_BITRATE,
+            preset=self.config.STREAM_PRESET,
         )
 
         streaming_task = asyncio.create_task(self.streaming_engine.start_streaming())
@@ -131,7 +151,8 @@ def main():
         print("\nArresto del nodo in corso...")
     finally:
         if node:
-            # asyncio.run(node.shutdown()) # Questa riga può causare problemi in fase di shutdown
+                        # Lo shutdown di Asyncio può essere problematico qui.
+            # La pulizia avviene già nel motore di streaming.
             pass # La pulizia avviene già nel motore di streaming
 
 if __name__ == "__main__":

@@ -1,13 +1,11 @@
 
-import os
 import pickle
 import sys
+from pathlib import Path
 
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
-
-from pathlib import Path
 
 # --- CONFIGURAZIONE E COSTANTI ---
 SCOPES = ["https://www.googleapis.com/auth/youtube"]
@@ -28,13 +26,19 @@ def get_authenticated_service(client_secrets_file: Path, token_pickle_file: Path
             creds.refresh(Request())
         else:
             if not client_secrets_file.exists():
-                print(f"ERRORE: Il file delle credenziali '{client_secrets_file}' non è stato trovato.", file=sys.stderr)
+                print(
+                    "ERRORE: Il file delle credenziali "
+                    f"'{client_secrets_file}' non è stato trovato.",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
-            flow = InstalledAppFlow.from_client_secrets_file(client_secrets_file, SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(
+                client_secrets_file, SCOPES
+            )
             creds = flow.run_local_server(port=0)
         with open(token_pickle_file, "wb") as token:
             pickle.dump(creds, token)
-            
+
     return build(API_SERVICE_NAME, API_VERSION, credentials=creds)
 
 def get_or_create_stream(youtube):
@@ -44,8 +48,7 @@ def get_or_create_stream(youtube):
     """
     print("Recupero/Creazione dello stream di YouTube...")
     list_streams_request = youtube.liveStreams().list(
-        part="id,snippet,cdn",
-        mine=True
+        part="id,snippet,cdn", mine=True
     )
     streams = list_streams_request.execute().get("items", [])
 
@@ -60,14 +63,16 @@ def get_or_create_stream(youtube):
             body={
                 "snippet": {
                     "title": "GitNet Stream (Reusable)",
-                    "description": "Stream riutilizzabile per il progetto GitNet Stream"
+                    "description": (
+                        "Stream riutilizzabile per il progetto GitNet Stream"
+                    ),
                 },
                 "cdn": {
                     "frameRate": "variable",
                     "ingestionType": "rtmp",
-                    "resolution": "variable"
-                }
-            }
+                    "resolution": "variable",
+                },
+            },
         )
         new_stream = create_stream_request.execute()
         stream_id = new_stream["id"]
@@ -88,12 +93,12 @@ def create_broadcast(youtube, stream_id):
         body={
             "snippet": {
                 "title": "GitNet Stream - New Node Online",
-                "scheduledStartTime": "2024-01-01T00:00:00Z" # L'ora non è importante per eventi "live now"
+                "scheduledStartTime": "2024-01-01T00:00:00Z",  # L'ora non è importante
             },
             "status": {
-                "privacyStatus": "public" # o 'private' o 'unlisted'
-            }
-        }
+                "privacyStatus": "public"  # o 'private' o 'unlisted'
+            },
+        },
     )
     broadcast = broadcast_request.execute()
     broadcast_id = broadcast["id"]

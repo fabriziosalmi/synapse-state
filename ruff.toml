@@ -1,0 +1,15 @@
+# Imposta la lunghezza massima della linea a 88, come per Black.
+line-length = 88
+
+[lint]
+# Seleziona le regole da applicare.
+# E = pycodestyle (errori)
+# W = pycodestyle (warning)
+# F = Pyflakes (errori logici)
+# I = isort (ordinamento import)
+# B = flake8-bugbear (potenziali bug)
+select = ["E", "W", "F", "I", "B"]
+
+[lint.isort]
+# Ordina gli import in sezioni separate per una migliore leggibilità.
+known-first-party = ["auth", "config", "renderer", "streamer", "sync"]

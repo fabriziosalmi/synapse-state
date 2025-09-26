@@ -14,3 +14,7 @@ GitPython
 
 # Libreria per caricare variabili d'ambiente da file .env
 python-dotenv
+
+# --- Strumenti di Sviluppo ---
+pytest
+ruff

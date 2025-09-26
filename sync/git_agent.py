@@ -1,15 +1,16 @@
-
-import os
 import json
-import time
+import os
 import sys
-from pathlib import Path
+import time
 from functools import wraps
+from pathlib import Path
 
-from git import Repo, GitCommandError
+from git import GitCommandError, Repo
+
 
 def retry_on_git_error(max_retries=3, delay=5):
     """Decoratore per rieseguire un'operazione Git in caso di fallimento."""
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -17,15 +18,27 @@ def retry_on_git_error(max_retries=3, delay=5):
                 try:
                     return func(*args, **kwargs)
                 except GitCommandError as e:
-                    print(f"Tentativo {attempt + 1}/{max_retries} fallito per {func.__name__}: {e}", file=sys.stderr)
+                    print(
+                        f"Tentativo {attempt + 1}/{max_retries} fallito per "
+                        f"{func.__name__}: {e}",
+                        file=sys.stderr,
+                    )
                     if attempt < max_retries - 1:
-                        print(f"Nuovo tentativo in {delay} secondi...", file=sys.stderr)
+                        print(
+                            f"Nuovo tentativo in {delay} secondi...", file=sys.stderr
+                        )
                         time.sleep(delay)
                     else:
-                        print(f"Tutti i tentativi per {func.__name__} sono falliti.", file=sys.stderr)
+                        print(
+                            f"Tutti i tentativi per {func.__name__} sono falliti.",
+                            file=sys.stderr,
+                        )
             return None
+
         return wrapper
+
     return decorator
+
 
 class GitAgent:
     """
@@ -61,27 +74,34 @@ class GitAgent:
     def push_heartbeat(self, stream_id: str):
         """Aggiorna il file del nodo con un nuovo timestamp e fa il push."""
         self.local_path.joinpath("nodes").mkdir(exist_ok=True)
-        
+
         current_time = int(time.time())
         creation_timestamp = current_time
 
         # Se il file esiste già, preserva il suo creation_timestamp
         if self.node_file.exists():
             try:
-                with open(self.node_file, 'r') as f:
+                with open(self.node_file, "r") as f:
                     existing_data = json.load(f)
-                    # Usa il valore esistente se presente, altrimenti mantieni quello attuale
-                    creation_timestamp = existing_data.get('creation_timestamp', current_time)
+                    # Usa il valore esistente se presente, altrimenti
+                    # mantieni quello attuale
+                    creation_timestamp = existing_data.get(
+                        "creation_timestamp", current_time
+                    )
             except (json.JSONDecodeError, OSError):
-                print(f"Attenzione: impossibile leggere il file del nodo esistente {self.node_file}. Ne verrà creato uno nuovo.", file=sys.stderr)
+                print(
+                    f"Attenzione: impossibile leggere il file del nodo esistente "
+                    f"{self.node_file}. Ne verrà creato uno nuovo.",
+                    file=sys.stderr,
+                )
 
         node_data = {
             "stream_id": stream_id,
             "timestamp": current_time,
-            "creation_timestamp": creation_timestamp
+            "creation_timestamp": creation_timestamp,
         }
 
-        with open(self.node_file, 'w') as f:
+        with open(self.node_file, "w") as f:
             json.dump(node_data, f, indent=2)
 
         if self.repo.is_dirty(untracked_files=True):
@@ -92,35 +112,44 @@ class GitAgent:
             print("Heartbeat inviato con successo.")
 
     def get_world_state(self) -> dict:
-        """Legge tutti i file dei nodi e degli eventi per costruire lo stato del mondo."""
+        """Legge nodi ed eventi per costruire lo stato del mondo."""
         nodes_path = self.local_path / "nodes"
         nodes = []
         if nodes_path.exists():
             for file_path in nodes_path.glob("*.json"):
-                with open(file_path, 'r') as f:
+                with open(file_path, "r") as f:
                     try:
                         data = json.load(f)
-                        nodes.append({
-                            "id": file_path.stem,
-                            "stream_id": data.get("stream_id"),
-                            "timestamp": data.get("timestamp"),
-                            "creation_timestamp": data.get("creation_timestamp")
-                        })
+                        nodes.append(
+                            {
+                                "id": file_path.stem,
+                                "stream_id": data.get("stream_id"),
+                                "timestamp": data.get("timestamp"),
+                                "creation_timestamp": data.get("creation_timestamp"),
+                            }
+                        )
                     except json.JSONDecodeError:
-                        print(f"Attenzione: file JSON del nodo non valido: {file_path}", file=sys.stderr)
-        
+                        print(
+                            f"Attenzione: file JSON del nodo non valido: {file_path}",
+                            file=sys.stderr,
+                        )
+
         # La logica di posizionamento verrà gestita dal frontend
 
         events_path = self.local_path / "events"
         events = []
         if events_path.exists():
             for file_path in events_path.glob("*.json"):
-                with open(file_path, 'r') as f:
+                with open(file_path, "r") as f:
                     try:
                         data = json.load(f)
                         events.append(data)
                     except json.JSONDecodeError:
-                        print(f"Attenzione: file JSON dell'evento non valido: {file_path}", file=sys.stderr)
+                        print(
+                            f"Attenzione: file JSON dell'evento non valido: "
+                            f"{file_path}",
+                            file=sys.stderr,
+                        )
 
         connections = []
         return {"nodes": nodes, "connections": connections, "events": events}
@@ -140,10 +169,10 @@ class GitAgent:
             "node_id": self.node_id,
             "timestamp": int(time.time()),
             "ttl": ttl_seconds,
-            "data": data
+            "data": data,
         }
 
-        with open(event_file_path, 'w') as f:
+        with open(event_file_path, "w") as f:
             json.dump(event_data, f, indent=2)
 
         print(f"Invio dell'evento '{event_type}'...")
@@ -161,7 +190,7 @@ class GitAgent:
 
         files_to_remove = []
         for file_path in events_path.glob("*.json"):
-            with open(file_path, 'r') as f:
+            with open(file_path, "r") as f:
                 try:
                     data = json.load(f)
                     created_at = data.get("timestamp", 0)
@@ -170,7 +199,7 @@ class GitAgent:
                         files_to_remove.append(str(file_path))
                 except (json.JSONDecodeError, AttributeError):
                     files_to_remove.append(str(file_path))
-        
+
         if files_to_remove:
             print(f"Pulizia di {len(files_to_remove)} eventi scaduti...")
             self.repo.index.remove(files_to_remove, working_tree=False)
@@ -178,4 +207,7 @@ class GitAgent:
                 try:
                     os.remove(f)
                 except OSError as e:
-                    print(f"Errore nella rimozione del file evento locale {f}: {e}", file=sys.stderr)
+                    print(
+                        f"Errore nella rimozione del file evento locale {f}: {e}",
+                        file=sys.stderr,
+                    )
