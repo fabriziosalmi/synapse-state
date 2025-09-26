@@ -46,7 +46,13 @@ class WebSocketLogHandler(logging.Handler):
 
     def emit(self, record):
         log_entry = self.format(record)
-        asyncio.create_task(self.manager.broadcast(log_entry))
+        try:
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                loop.create_task(self.manager.broadcast(log_entry))
+        except RuntimeError:
+            # Il loop non è ancora in esecuzione, ignora l'invio al ws per i log iniziali.
+            pass
 
 
 class StreamingEngine:
