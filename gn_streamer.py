@@ -188,11 +188,11 @@ def main():
         sys.exit(1)
     except KeyboardInterrupt:
         logging.info("\nArresto del nodo in corso...")
+        if node and node.streaming_engine:
+            asyncio.run(node.shutdown())
     finally:
-        if node:
-            # Lo shutdown di Asyncio può essere problematico qui.
-            # La pulizia avviene già nel motore di streaming.
-            pass
+        # La pulizia è gestita dal metodo shutdown e dal motore di streaming
+        pass
 
 
 
