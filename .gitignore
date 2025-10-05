@@ -13,6 +13,12 @@ client_secrets.json
 token.pickle
 token.json
 
+# Repository Git clonato localmente (stato della rete)
+synapse_state_repo/
+
+# Stato del renderer
+renderer/state.json
+
 # File di configurazione specifici dell'IDE
 .idea/
 .vscode/
