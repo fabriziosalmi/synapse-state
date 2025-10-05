@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import sys
 import time
 from functools import wraps
 from pathlib import Path

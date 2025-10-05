@@ -28,7 +28,8 @@ def get_authenticated_service(client_secrets_file: Path, token_pickle_file: Path
         else:
             if not client_secrets_file.exists():
                 logging.error(
-                    f"ERRORE: Il file delle credenziali '{client_secrets_file}' non è stato trovato."
+                    f"ERRORE: Il file delle credenziali "
+                    f"'{client_secrets_file}' non è stato trovato."
                 )
                 sys.exit(1)
             flow = InstalledAppFlow.from_client_secrets_file(
@@ -57,14 +58,17 @@ def get_or_create_stream(youtube):
         stream_id = streams[0]["id"]
         ingestion_info = streams[0]["cdn"]["ingestionInfo"]
     else:
-        logging.info("Nessuno stream esistente trovato. Creazione di un nuovo stream...")
+        logging.info(
+            "Nessuno stream esistente trovato. "
+            "Creazione di un nuovo stream..."
+        )
         create_stream_request = youtube.liveStreams().insert(
             part="snippet,cdn",
             body={
                 "snippet": {
-                    "title": "GitNet Stream (Reusable)",
+                    "title": "Synapse Stream (Reusable)",
                     "description": (
-                        "Stream riutilizzabile per il progetto GitNet Stream"
+                        "Stream riutilizzabile per il progetto Synapse"
                     ),
                 },
                 "cdn": {
@@ -93,7 +97,7 @@ def create_broadcast(youtube, stream_id):
         part="snippet,status",
         body={
             "snippet": {
-                "title": "GitNet Stream - New Node Online",
+                "title": "Synapse Stream - New Node Online",
                 "scheduledStartTime": "2024-01-01T00:00:00Z",  # L'ora non è importante
             },
             "status": {
