@@ -58,7 +58,7 @@ class SynapseNode:
                 f"https://www.youtube.com/watch?v={self.broadcast_id}"
             )
             return rtmp_url
-        except Exception as e:
+        except Exception:
             logging.exception("Impossibile inizializzare lo stream di YouTube:")
             sys.exit(1)
 
@@ -85,9 +85,15 @@ class SynapseNode:
 
             num_nodes = len(sorted_nodes)
             try:
-                my_index = [i for i, n in enumerate(sorted_nodes) if n["id"] == self.config.NODE_ID][0]
+                my_index = [
+                    i
+                    for i, n in enumerate(sorted_nodes)
+                    if n["id"] == self.config.NODE_ID
+                ][0]
             except IndexError:
-                logging.warning("Nodo corrente non trovato nella lista dei nodi. Riprovo...")
+                logging.warning(
+                    "Nodo corrente non trovato nella lista dei nodi. Riprovo..."
+                )
                 await asyncio.sleep(self.config.TICK_INTERVAL_SECONDS)
                 continue
 
@@ -96,16 +102,24 @@ class SynapseNode:
             turn_index = tick % num_nodes
 
             if my_index == turn_index:
-                logging.info(f"È il mio turno ({my_index}/{num_nodes}). Eseguo il push.")
+                logging.info(
+                    f"È il mio turno ({my_index}/{num_nodes}). Eseguo il push."
+                )
                 # 4. Esegui le operazioni di scrittura (solo il nodo di turno)
                 self.git_agent.push_heartbeat(self.broadcast_id)
 
                 # Invia un impulso se è passato abbastanza tempo
                 if (now - self.last_pulse_time) > PULSE_INTERVAL:
-                    other_nodes = [n for n in sorted_nodes if n["id"] != self.config.NODE_ID]
+                    other_nodes = [
+                        n
+                        for n in sorted_nodes
+                        if n["id"] != self.config.NODE_ID
+                    ]
                     if other_nodes:
                         target_node = random.choice(other_nodes)
-                        logging.info(f"Invio di un impulso al nodo: {target_node['id']}")
+                        logging.info(
+                            f"Invio di un impulso al nodo: {target_node['id']}"
+                        )
                         self.git_agent.push_event(
                             event_type="pulse",
                             data={"target_node_id": target_node["id"]},
@@ -174,11 +188,12 @@ def main():
         sys.exit(1)
     except KeyboardInterrupt:
         logging.info("\nArresto del nodo in corso...")
+        if node and node.streaming_engine:
+            asyncio.run(node.shutdown())
     finally:
-        if node:
-            # Lo shutdown di Asyncio può essere problematico qui.
-            # La pulizia avviene già nel motore di streaming.
-            pass
+        # La pulizia è gestita dal metodo shutdown e dal motore di streaming
+        pass
+
 
 
 if __name__ == "__main__":

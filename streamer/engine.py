@@ -51,7 +51,8 @@ class WebSocketLogHandler(logging.Handler):
             if loop.is_running():
                 loop.create_task(self.manager.broadcast(log_entry))
         except RuntimeError:
-            # Il loop non è ancora in esecuzione, ignora l'invio al ws per i log iniziali.
+            # Il loop non è ancora in esecuzione, ignora l'invio al ws
+            # per i log iniziali.
             pass
 
 

@@ -15,8 +15,8 @@ services:
 
     # Monta i volumi per rendere persistenti i dati e fornire le credenziali
     volumes:
-      # Monta la directory locale 'gitnet_state' per conservare il repo clonato
-      - ./gitnet_state:/app/gitnet_state
+      # Monta la directory locale per conservare il repo clonato
+      - ./synapse_state_repo:/app/synapse_state_repo
       # Monta il file delle credenziali di YouTube (sola lettura)
       - ./client_secrets.json:/app/client_secrets.json:ro
       # Monta il file del token di autenticazione per non dover ri-autorizzare ogni volta
